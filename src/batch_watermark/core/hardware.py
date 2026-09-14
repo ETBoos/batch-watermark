@@ -85,6 +85,9 @@ def _vendor_from_name(name: str) -> Optional[str]:
         return "amd"
     if any(k in lower for k in ("intel", "arc", "uhd", "iris", "xe ")):
         return "intel"
+    # Apple Silicon / macOS GPU (VideoToolbox)
+    if any(k in lower for k in ("apple", "m1", "m2", "m3", "m4", "m5", "paravirtual")):
+        return "apple"
     return None
 
 

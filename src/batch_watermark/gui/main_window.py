@@ -264,7 +264,7 @@ class MainWindow(QMainWindow):
         )
         hw_l.addWidget(self.encoder_label)
 
-        note = QLabel("说明：叠水印主要在 CPU；显卡负责加速视频压缩导出。")
+        note = QLabel("说明：叠水印滤镜主要在 CPU；导出编码优先用硬件（Mac=VideoToolbox，Win=NVENC/AMF/QSV），失败自动回退。")
         note.setWordWrap(True)
         note.setStyleSheet("color: #666;")
         hw_l.addWidget(note)

@@ -24,7 +24,7 @@ _WIN_FFMPEG_CANDIDATES = [
 ]
 
 # Preference order when hardware encoding is requested
-HW_ENCODER_CANDIDATES = ("h264_nvenc", "h264_amf", "h264_qsv")
+HW_ENCODER_CANDIDATES = ("h264_videotoolbox", "h264_nvenc", "h264_amf", "h264_qsv")
 SOFTWARE_ENCODER = "libx264"
 
 
@@ -54,6 +54,8 @@ class EncoderChoice:
 
     @property
     def label_zh(self) -> str:
+        if self.name == "h264_videotoolbox":
+            return "Apple VideoToolbox 硬件编码 (h264_videotoolbox)"
         if self.name == "h264_nvenc":
             return "NVIDIA NVENC (h264_nvenc)"
         if self.name == "h264_amf":
@@ -123,6 +125,7 @@ def pick_video_encoder(
     ordered: list[str] = []
     hints = {h.lower() for h in (vendor_hints or ())}
     prefer_map = {
+        "apple": "h264_videotoolbox",
         "nvidia": "h264_nvenc",
         "amd": "h264_amf",
         "intel": "h264_qsv",
@@ -158,14 +161,24 @@ def _overlay_xy_expr(position: Position, margin: int) -> tuple[str, str]:
 
 def _encoder_args(encoder: str) -> list[str]:
     """Return -c:v and quality flags for the chosen encoder."""
+    if encoder == "h264_videotoolbox":
+        # q:v 1-100 (lower = higher quality). ~45 balances clarity/speed on Apple Silicon.
+        return [
+            "-c:v",
+            "h264_videotoolbox",
+            "-allow_sw",
+            "1",
+            "-q:v",
+            "45",
+        ]
     if encoder == "h264_nvenc":
         return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23", "-b:v", "0"]
     if encoder == "h264_amf":
         return ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "23"]
     if encoder == "h264_qsv":
         return ["-c:v", "h264_qsv", "-global_quality", "23"]
-    # software
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", "23"]
+    # software fallback — veryfast is much quicker than medium on Mac CPU
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]
 
 
 def _build_overlay_cmd(
