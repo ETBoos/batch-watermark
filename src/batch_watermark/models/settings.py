@@ -8,9 +8,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from PySide6.QtCore import QSettings
-
-
 class WatermarkMode(str, Enum):
     TEXT = "text"
     IMAGE = "image"
@@ -129,11 +126,16 @@ def settings_json_path() -> Path:
 def save_settings(settings: AppSettings) -> None:
     path = settings_json_path()
     path.write_text(json.dumps(settings.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-    # Also mirror into QSettings for convenience
-    qs = QSettings("ETBoos", "batch_watermark")
-    for k, v in settings.to_dict().items():
-        qs.setValue(k, v)
-    qs.sync()
+    # Also mirror into QSettings for convenience (optional if Qt unavailable)
+    try:
+        from PySide6.QtCore import QSettings
+
+        qs = QSettings("ETBoos", "batch_watermark")
+        for k, v in settings.to_dict().items():
+            qs.setValue(k, v)
+        qs.sync()
+    except Exception:
+        pass
 
 
 def load_settings() -> AppSettings:
@@ -146,6 +148,10 @@ def load_settings() -> AppSettings:
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
             pass
     # Fallback: QSettings
+    try:
+        from PySide6.QtCore import QSettings
+    except Exception:
+        return AppSettings()
     qs = QSettings("ETBoos", "batch_watermark")
     data: dict[str, Any] = {}
     for key in qs.allKeys():
