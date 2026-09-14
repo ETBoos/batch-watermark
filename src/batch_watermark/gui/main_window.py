@@ -346,6 +346,11 @@ class MainWindow(QMainWindow):
         splitter.addWidget(left_column)
 
         # ---- Right: progress / log / failures ----
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setSpacing(8)
+        right_layout.setContentsMargins(8, 4, 4, 4)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setValue(0)
