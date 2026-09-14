@@ -44,6 +44,26 @@ brew install ffmpeg
 
 若未安装 ffmpeg，GUI 会明确提示，无法开始处理。
 
+
+## Windows 一键安装（推荐）
+
+仓库根目录已提供批处理，**双击即可**：
+
+| 文件 | 作用 |
+|------|------|
+| `安装配置-Windows.bat` | 检查/安装 Python 依赖链提示、安装 uv、尝试 winget 安装 ffmpeg、`uv sync`、生成启动脚本 |
+| `启动-Windows.bat` | 启动图形界面 |
+| `环境自检-Windows.bat` | 仅打印 Python / uv / ffmpeg / 显卡 / 编码器状态 |
+
+步骤：
+
+1. 下载或克隆本仓库到 Windows（例如 `D:\tools\batch-watermark`）
+2. 先安装 [Python 3.10+](https://www.python.org/downloads/windows/)，勾选 **Add python.exe to PATH**
+3. 双击 `安装配置-Windows.bat`，按提示完成
+4. 以后日常使用双击 `启动-Windows.bat`
+
+> 若公司电脑禁止脚本，请用管理员 PowerShell 执行：`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
 ## 安装与运行
 
 ```bash
