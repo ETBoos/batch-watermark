@@ -81,9 +81,16 @@ def build_jobs(sources: list[Path], output_dir: Path) -> list[WatermarkJob]:
 
 def _image_worker(payload: dict) -> dict:
     """Top-level picklable worker for ProcessPoolExecutor."""
+    from batch_watermark.models.settings import Position, WatermarkMode
+
     source = Path(payload["source"])
     output = Path(payload["output"])
-    settings = WatermarkSettings(**payload["settings"])
+    raw = dict(payload["settings"])
+    if isinstance(raw.get("mode"), str):
+        raw["mode"] = WatermarkMode(raw["mode"])
+    if isinstance(raw.get("position"), str):
+        raw["position"] = Position(raw["position"])
+    settings = WatermarkSettings(**raw)
     max_retries = int(payload.get("max_retries", 3))
     policy = RetryPolicy(max_retries=max_retries)
     attempts = 0
@@ -154,7 +161,7 @@ def _process_video_one(
 
 def _settings_to_dict(settings: WatermarkSettings) -> dict:
     return {
-        "mode": settings.mode,
+        "mode": settings.mode.value if hasattr(settings.mode, "value") else settings.mode,
         "text": settings.text,
         "font_path": settings.font_path,
         "font_size": settings.font_size,
@@ -163,7 +170,7 @@ def _settings_to_dict(settings: WatermarkSettings) -> dict:
         "rotation": settings.rotation,
         "image_path": settings.image_path,
         "image_scale": settings.image_scale,
-        "position": settings.position,
+        "position": settings.position.value if hasattr(settings.position, "value") else settings.position,
         "margin": settings.margin,
         "cpu_utilization": settings.cpu_utilization,
         "max_retries": settings.max_retries,
