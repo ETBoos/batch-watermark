@@ -1,4 +1,4 @@
-"""批量水印工具 — batch text/image watermarks for images and videos."""
+"""视频批量图片水印工具 — batch image watermarks for videos."""
 
-__version__ = "1.0.0"
-APP_DISPLAY_NAME = "批量水印工具"
+__version__ = "1.1.0"
+APP_DISPLAY_NAME = "视频批量图片水印工具"

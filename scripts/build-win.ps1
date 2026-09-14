@@ -1,4 +1,4 @@
-# Windows PyInstaller build script for 批量水印工具
+# Windows PyInstaller build script for 视频批量图片水印工具
 # Prerequisites: Windows, Python 3.10+, uv installed, run from repo root.
 # Usage:  .\scripts\build-win.ps1
 
@@ -12,7 +12,7 @@ Write-Host "==> install PyInstaller" -ForegroundColor Cyan
 uv pip install pyinstaller
 
 $entry = "src/batch_watermark/__main__.py"
-$name = "批量水印工具"
+$name = "视频批量图片水印工具"
 
 Write-Host "==> PyInstaller onefile/onedir build" -ForegroundColor Cyan
 uv run pyinstaller `
@@ -32,4 +32,5 @@ uv run pyinstaller `
 Write-Host ""
 Write-Host "Build finished. Output under .\dist\$name\" -ForegroundColor Green
 Write-Host "Reminder: ship ffmpeg.exe separately or instruct users to install ffmpeg on PATH." -ForegroundColor Yellow
+Write-Host "For GPU encode on Windows, use an ffmpeg build that includes h264_nvenc / h264_amf / h264_qsv." -ForegroundColor Yellow
 Write-Host "Common paths: C:\ffmpeg\bin\ffmpeg.exe , winget install ffmpeg" -ForegroundColor Yellow

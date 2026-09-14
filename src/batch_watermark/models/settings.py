@@ -8,8 +8,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+
 class WatermarkMode(str, Enum):
-    TEXT = "text"
+    TEXT = "text"  # retained for engine helpers / legacy settings
     IMAGE = "image"
 
 
@@ -42,13 +43,13 @@ POSITION_LABELS_ZH = {
 
 @dataclass
 class WatermarkSettings:
-    mode: WatermarkMode = WatermarkMode.TEXT
-    text: str = "水印"
+    mode: WatermarkMode = WatermarkMode.IMAGE
+    text: str = ""  # unused in GUI (legacy)
     font_path: str = ""
     font_size: int = 36
     color: str = "#FFFFFF"
     opacity: float = 0.5  # 0.0–1.0
-    rotation: float = 0.0  # degrees
+    rotation: float = 0.0  # degrees (image_engine helper)
     image_path: str = ""
     image_scale: float = 0.2  # relative to base width
     position: Position = Position.BOTTOM_RIGHT
@@ -57,6 +58,7 @@ class WatermarkSettings:
     max_retries: int = 3
     output_dir: str = ""
     last_input_dir: str = ""
+    prefer_hw_encode: bool = True
 
 
 @dataclass
@@ -77,6 +79,9 @@ class AppSettings:
                 wm.mode = WatermarkMode(data["mode"])
             except ValueError:
                 pass
+        # Product is image-watermark on video; coerce legacy text mode.
+        if wm.mode != WatermarkMode.IMAGE:
+            wm.mode = WatermarkMode.IMAGE
         if "position" in data:
             try:
                 wm.position = Position(data["position"])
@@ -96,13 +101,22 @@ class AppSettings:
             "max_retries",
             "output_dir",
             "last_input_dir",
+            "prefer_hw_encode",
         ):
             if key in data and data[key] is not None:
                 setattr(wm, key, data[key])
-        # Clamp
         wm.cpu_utilization = max(10, min(100, int(wm.cpu_utilization)))
         wm.opacity = max(0.0, min(1.0, float(wm.opacity)))
         wm.max_retries = max(0, int(wm.max_retries))
+        if isinstance(wm.prefer_hw_encode, str):
+            wm.prefer_hw_encode = wm.prefer_hw_encode.strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
+        else:
+            wm.prefer_hw_encode = bool(wm.prefer_hw_encode)
         return cls(watermark=wm)
 
 
@@ -126,7 +140,6 @@ def settings_json_path() -> Path:
 def save_settings(settings: AppSettings) -> None:
     path = settings_json_path()
     path.write_text(json.dumps(settings.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-    # Also mirror into QSettings for convenience (optional if Qt unavailable)
     try:
         from PySide6.QtCore import QSettings
 
@@ -147,7 +160,6 @@ def load_settings() -> AppSettings:
                 return AppSettings.from_dict(data)
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
             pass
-    # Fallback: QSettings
     try:
         from PySide6.QtCore import QSettings
     except Exception:
@@ -157,7 +169,6 @@ def load_settings() -> AppSettings:
     for key in qs.allKeys():
         data[str(key)] = qs.value(key)
     if data:
-        # QSettings may return strings for numbers
         for num_key in ("font_size", "margin", "cpu_utilization", "max_retries"):
             if num_key in data:
                 try:
@@ -170,5 +181,11 @@ def load_settings() -> AppSettings:
                     data[float_key] = float(data[float_key])
                 except (TypeError, ValueError):
                     pass
+        if "prefer_hw_encode" in data:
+            v = data["prefer_hw_encode"]
+            if isinstance(v, str):
+                data["prefer_hw_encode"] = v.strip().lower() in ("1", "true", "yes", "on")
+            else:
+                data["prefer_hw_encode"] = bool(v)
         return AppSettings.from_dict(data)
     return AppSettings()
