@@ -9,6 +9,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -132,7 +133,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(f"{APP_DISPLAY_NAME} v{__version__}")
-        self.resize(1100, 760)
+        self.setMinimumSize(720, 520)
 
         self._app_settings = load_settings()
         self._processor = BatchProcessor()
@@ -151,8 +152,8 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
-        root.setContentsMargins(10, 10, 10, 8)
-        root.setSpacing(10)
+        root.setContentsMargins(6, 6, 6, 4)
+        root.setSpacing(6)
 
         splitter = QSplitter(Qt.Horizontal)
         root.addWidget(splitter)
@@ -172,14 +173,15 @@ class MainWindow(QMainWindow):
         # ---- Left scrollable settings ----
         left_inner = QWidget()
         left_layout = QVBoxLayout(left_inner)
-        left_layout.setSpacing(12)
-        left_layout.setContentsMargins(4, 4, 8, 4)
+        left_layout.setSpacing(6)
+        left_layout.setContentsMargins(2, 2, 4, 2)
 
         # 1. Input
         input_box = QGroupBox("1. 输入视频 / 文件夹（支持拖放）")
         input_l = QVBoxLayout(input_box)
         self.file_list = DropListWidget()
-        self.file_list.setMinimumHeight(140)
+        self.file_list.setMinimumHeight(72)
+        self.file_list.setMaximumHeight(160)
         self.file_list.paths_dropped.connect(self._add_paths)
         input_l.addWidget(self.file_list)
         btn_row = QHBoxLayout()
@@ -222,27 +224,32 @@ class MainWindow(QMainWindow):
         img_row.addWidget(self.btn_wm_image)
         wm_l.addLayout(img_row)
 
-        opts = QHBoxLayout()
-        opts.setSpacing(10)
-        for caption, widget_attr, factory in (
+        from PySide6.QtWidgets import QGridLayout
+
+        opts = QGridLayout()
+        opts.setHorizontalSpacing(8)
+        opts.setVerticalSpacing(4)
+        fields = (
             ("缩放（相对宽）", "image_scale", lambda: self._make_scale_spin()),
             ("不透明度", "opacity", lambda: self._make_opacity_spin()),
             ("位置", "position", lambda: self._make_position_combo()),
             ("边距 px", "margin", lambda: self._make_margin_spin()),
-        ):
-            col = QVBoxLayout()
-            col.addWidget(section_caption(caption))
+        )
+        for i, (caption, widget_attr, factory) in enumerate(fields):
+            cell = QVBoxLayout()
+            cell.setSpacing(2)
+            cell.addWidget(section_caption(caption))
             w = factory()
             setattr(self, widget_attr, w)
-            col.addWidget(w)
-            opts.addLayout(col)
+            cell.addWidget(w)
+            opts.addLayout(cell, i // 2, i % 2)
         wm_l.addLayout(opts)
         left_layout.addWidget(wm_box)
 
         # 4. Hardware — pure VBox, no QFormLayout collisions
         hw_box = QGroupBox("4. 硬件与并发")
         hw_l = QVBoxLayout(hw_box)
-        hw_l.setSpacing(10)
+        hw_l.setSpacing(4)
 
         hw_l.addWidget(section_caption("CPU / 内存"))
         self.hw_label = info_label()
@@ -311,7 +318,7 @@ class MainWindow(QMainWindow):
         left_scroll.setFrameShape(QFrame.NoFrame)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         left_scroll.setWidget(left_inner)
-        left_scroll.setMinimumWidth(440)
+        left_scroll.setMinimumWidth(320)
 
         left_column = QWidget()
         left_col = QVBoxLayout(left_column)
@@ -319,12 +326,19 @@ class MainWindow(QMainWindow):
         left_col.setSpacing(8)
         left_col.addWidget(left_scroll, stretch=1)
 
-        ctrl = QHBoxLayout()
+        ctrl_wrap = QWidget()
+        ctrl_wrap.setObjectName("actionBar")
+        ctrl_wrap.setStyleSheet(
+            "#actionBar { background: #f0f0f2; border-top: 1px solid #ddd; }"
+        )
+        ctrl = QHBoxLayout(ctrl_wrap)
+        ctrl.setContentsMargins(4, 4, 4, 4)
+        ctrl.setSpacing(4)
         self.btn_start = QPushButton("开始")
         self.btn_pause = QPushButton("暂停")
         self.btn_resume = QPushButton("继续")
         self.btn_cancel = QPushButton("取消")
-        self.btn_retry = QPushButton("重试失败项")
+        self.btn_retry = QPushButton("重试失败")
         self.btn_start.setDefault(True)
         self.btn_pause.setEnabled(False)
         self.btn_resume.setEnabled(False)
@@ -341,8 +355,10 @@ class MainWindow(QMainWindow):
             self.btn_cancel,
             self.btn_retry,
         ):
+            b.setMinimumWidth(56)
+            b.setMaximumHeight(26)
             ctrl.addWidget(b)
-        left_col.addLayout(ctrl)
+        left_col.addWidget(ctrl_wrap)
         splitter.addWidget(left_column)
 
         # ---- Right: progress / log / failures ----
@@ -373,14 +389,30 @@ class MainWindow(QMainWindow):
         self.fail_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         right_layout.addWidget(self.fail_table, stretch=1)
 
-        right.setMinimumWidth(400)
+        right.setMinimumWidth(280)
         splitter.addWidget(right)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
-        splitter.setSizes([500, 650])
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([420, 360])
 
-        self.resize(1180, 820)
+        self._fit_to_screen()
         self.statusBar().showMessage("就绪 — 批量给视频添加图片水印")
+
+
+    def _fit_to_screen(self) -> None:
+        """Size window for small / high-DPI laptops so action buttons stay visible."""
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            self.resize(960, 640)
+            return
+        avail = screen.availableGeometry()
+        # Leave room for taskbar; prefer ~90% of available height
+        w = min(1100, max(720, int(avail.width() * 0.92)))
+        h = min(780, max(520, int(avail.height() * 0.88)))
+        self.resize(w, h)
+        frame = self.frameGeometry()
+        frame.moveCenter(avail.center())
+        self.move(frame.topLeft())
 
     def _make_scale_spin(self) -> QDoubleSpinBox:
         w = QDoubleSpinBox()
