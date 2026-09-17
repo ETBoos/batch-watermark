@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
         opts.setHorizontalSpacing(8)
         opts.setVerticalSpacing(4)
         fields = (
-            ("缩放（相对宽）", "image_scale", lambda: self._make_scale_spin()),
+            ("缩放（相对视频宽）", "image_scale", lambda: self._make_scale_spin()),
             ("不透明度", "opacity", lambda: self._make_opacity_spin()),
             ("位置", "position", lambda: self._make_position_combo()),
             ("边距 px", "margin", lambda: self._make_margin_spin()),

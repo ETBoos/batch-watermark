@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -46,6 +47,81 @@ def find_ffmpeg() -> Optional[str]:
 def ffmpeg_available() -> bool:
     return find_ffmpeg() is not None
 
+
+def find_ffprobe(ffmpeg_path: Optional[str] = None) -> Optional[str]:
+    """Locate ffprobe next to ffmpeg, or on PATH."""
+    if ffmpeg_path:
+        cand = Path(ffmpeg_path).with_name("ffprobe")
+        if os.name == "nt":
+            cand = Path(ffmpeg_path).with_name("ffprobe.exe")
+        if cand.is_file():
+            return str(cand)
+    which = shutil.which("ffprobe")
+    if which:
+        return which
+    ff = find_ffmpeg()
+    if ff:
+        cand = Path(ff).with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
+def probe_video_size(source: Path | str, ffmpeg_path: Optional[str] = None) -> tuple[int, int]:
+    """Return display width/height of the first video stream (fallback: coded size)."""
+    source = Path(source)
+    probe = find_ffprobe(ffmpeg_path)
+    if not probe:
+        raise RuntimeError("未找到 ffprobe，无法按视频宽度缩放水印。请安装完整 ffmpeg 套件。")
+    cmd = [
+        probe,
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height:stream_side_data=rotation",
+        "-of",
+        "json",
+        str(source),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"ffprobe 失败: {exc}") from exc
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffprobe 失败: {(proc.stderr or proc.stdout or '').strip()}")
+    data = json.loads(proc.stdout or "{}")
+    streams = data.get("streams") or []
+    if not streams:
+        raise RuntimeError(f"无法读取视频尺寸: {source}")
+    st = streams[0]
+    w = int(st.get("width") or 0)
+    h = int(st.get("height") or 0)
+    if w <= 0 or h <= 0:
+        raise RuntimeError(f"无效视频尺寸 {w}x{h}: {source}")
+    # Honor rotation metadata when present (90/270 swap)
+    rot = 0
+    for sd in st.get("side_data_list") or []:
+        if "rotation" in sd:
+            try:
+                rot = abs(int(float(sd["rotation"])))
+            except (TypeError, ValueError):
+                rot = 0
+    tags = st.get("tags") or {}
+    if not rot and "rotate" in tags:
+        try:
+            rot = abs(int(float(tags["rotate"])))
+        except (TypeError, ValueError):
+            rot = 0
+    if rot % 180 == 90:
+        w, h = h, w
+    return w, h
+
+
+def watermark_target_width(video_width: int, image_scale: float) -> int:
+    """Watermark width in pixels = relative scale × video frame width."""
+    return max(1, int(round(int(video_width) * max(0.01, float(image_scale)))))
 
 @dataclass(frozen=True)
 class EncoderChoice:
@@ -188,12 +264,19 @@ def _build_overlay_cmd(
     tmp_path: Path,
     settings: WatermarkSettings,
     encoder: str,
+    *,
+    video_width: Optional[int] = None,
 ) -> list[str]:
     x, y = _overlay_xy_expr(settings.position, settings.margin)
-    scale = max(0.01, float(settings.image_scale))
     opacity = max(0.0, min(1.0, float(settings.opacity)))
+    # Scale relative to VIDEO frame width (not watermark PNG width).
+    # Old bug: scale=iw*scale used watermark's iw → same PNG pixels on every
+    # video, so low-res clips looked huge and high-res clips looked tiny.
+    if video_width is None:
+        video_width, _ = probe_video_size(source, ffmpeg_path=ff)
+    target_w = watermark_target_width(video_width, settings.image_scale)
     filter_complex = (
-        f"[1:v]scale=iw*{scale}:-1,format=rgba,"
+        f"[1:v]scale={target_w}:-1,format=rgba,"
         f"colorchannelmixer=aa={opacity}[wm];"
         f"[0:v][wm]overlay=x={x}:y={y}:format=auto[vout]"
     )
@@ -255,12 +338,22 @@ def apply_video_watermark(
     )
     choice = pick_video_encoder(ff, prefer_hw=use_hw, vendor_hints=vendor_hints)
 
+    video_w, _video_h = probe_video_size(source, ffmpeg_path=ff)
+
     fd, tmp_name = tempfile.mkstemp(suffix=output.suffix or ".mp4", dir=str(output.parent))
     os.close(fd)
     tmp_path = Path(tmp_name)
 
     def _run(encoder: str) -> subprocess.CompletedProcess[str]:
-        cmd = _build_overlay_cmd(ff, source, settings.image_path, tmp_path, settings, encoder)
+        cmd = _build_overlay_cmd(
+            ff,
+            source,
+            settings.image_path,
+            tmp_path,
+            settings,
+            encoder,
+            video_width=video_w,
+        )
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
     try:
