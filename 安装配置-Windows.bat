@@ -107,16 +107,7 @@ echo   [OK] 依赖安装完成
 
 echo.
 echo [5/6] 写入启动脚本 ...
-(
-  echo @echo off
-  echo chcp 65001 ^>nul
-  echo cd /d "%%~dp0"
-  echo set "PATH=%%USERPROFILE%%\.local\bin;C:\ffmpeg\bin;%%PATH%%"
-  echo title 视频批量图片水印工具
-  echo echo 正在启动图形界面...
-  echo uv run python -m batch_watermark
-  echo if errorlevel 1 pause
-) > "启动-Windows.bat"
+echo   保留仓库自带的 启动-Windows.bat（不再覆盖，避免闪退看不到报错）
 echo   [OK] 已生成 启动-Windows.bat
 
 echo.
